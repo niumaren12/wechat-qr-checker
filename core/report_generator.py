@@ -2,6 +2,7 @@
 报告生成器
 用Jinja2渲染自包含HTML报告：汇总卡片+可筛选表格+截图展开
 """
+import sys
 import base64
 from pathlib import Path
 from datetime import datetime
@@ -20,8 +21,11 @@ class ReportGenerator:
         self.filename_template = cfg["filename_template"]
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # 加载Jinja2模板
-        template_dir = Path(__file__).parent.parent / "templates"
+        # 加载Jinja2模板（适配PyInstaller打包环境）
+        if getattr(sys, 'frozen', False):
+            template_dir = Path(sys._MEIPASS) / "templates"
+        else:
+            template_dir = Path(__file__).parent.parent / "templates"
         self.env = Environment(loader=FileSystemLoader(str(template_dir)))
         self.template = self.env.get_template("report.html")
 
