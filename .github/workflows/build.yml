@@ -23,6 +23,11 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: 生成配置文件
+        shell: cmd
+        run: |
+          copy config.example.yaml config.yaml
+
       - name: 打包为 exe
         shell: cmd
         run: |
@@ -32,6 +37,7 @@ jobs:
         shell: cmd
         run: |
           copy config.yaml dist\
+          copy config.example.yaml dist\
           copy wechat_ids.txt dist\
 
       - name: 上传构建产物

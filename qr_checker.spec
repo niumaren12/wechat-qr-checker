@@ -7,7 +7,6 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ('config.yaml', '.'),
         ('wechat_ids.txt', '.'),
         ('templates/report.html', 'templates/'),
     ],
