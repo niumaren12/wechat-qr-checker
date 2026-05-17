@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ title }} - {{ timestamp }}</title>
+<style>
+:root {
+  --color-normal: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-skip: #9ca3af;
+  --color-bg: #f1f5f9;
+  --color-card: #ffffff;
+  --color-text: #1e293b;
+  --color-text-secondary: #64748b;
+  --color-border: #e2e8f0;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--color-bg); color: var(--color-text); line-height:1.5; }
+.container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+/* 页头 */
+.header { margin-bottom: 24px; }
+.header h1 { font-size: 24px; font-weight: 700; }
+.header .timestamp { color: var(--color-text-secondary); font-size: 14px; margin-top: 4px; }
+
+/* 汇总卡片 */
+.cards { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+.card { background: var(--color-card); border-radius: var(--radius); padding: 18px 24px; min-width: 100px; flex: 1; box-shadow: var(--shadow); border-left: 4px solid transparent; }
+.card .card-num { font-size: 32px; font-weight: 700; line-height: 1.2; }
+.card .card-label { font-size: 13px; color: var(--color-text-secondary); margin-top: 4px; }
+.card-total { border-left-color: #3b82f6; }
+.card-total .card-num { color: #3b82f6; }
+.card-normal { border-left-color: var(--color-normal); }
+.card-normal .card-num { color: var(--color-normal); }
+.card-warning { border-left-color: var(--color-warning); }
+.card-warning .card-num { color: var(--color-warning); }
+.card-error { border-left-color: var(--color-error); }
+.card-error .card-num { color: var(--color-error); }
+.card-skip { border-left-color: var(--color-skip); }
+.card-skip .card-num { color: var(--color-skip); }
+
+/* 筛选栏 */
+.filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.filter-btn { padding: 7px 18px; border: 1px solid var(--color-border); border-radius: 20px; background: var(--color-card); cursor: pointer; font-size: 13px; transition: all 0.15s; }
+.filter-btn:hover { border-color: #3b82f6; color: #3b82f6; }
+.filter-btn.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+
+/* 表格 */
+.table-wrap { background: var(--color-card); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { background: #f8fafc; padding: 12px 14px; text-align: left; font-weight: 600; color: var(--color-text-secondary); border-bottom: 2px solid var(--color-border); white-space: nowrap; position: sticky; top: 0; }
+tbody td { padding: 10px 14px; border-bottom: 1px solid var(--color-border); vertical-align: top; }
+tbody tr:hover { background: #f8fafc; }
+tbody tr.row-normal:hover { background: #f0fdf4; }
+tbody tr.row-error:hover { background: #fef2f2; }
+tbody tr.row-warning:hover { background: #fffbeb; }
+tbody tr.row-skip:hover { background: #f8fafc; }
+
+/* 状态标签 */
+.status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.status-normal { background: #dcfce7; color: #166534; }
+.status-error { background: #fee2e2; color: #991b1b; }
+.status-warning { background: #fef3c7; color: #92400e; }
+.status-skip { background: #f1f5f9; color: #475569; }
+
+/* URL截断 */
+.url-text { max-width: 300px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; word-break: break-all; }
+.url-text:hover { white-space: normal; overflow: visible; }
+
+/* 展开行 */
+.expand-btn { cursor: pointer; color: #3b82f6; font-size: 12px; border: none; background: none; white-space: nowrap; }
+.expand-btn:hover { text-decoration: underline; }
+.detail-row { display: none; }
+.detail-row.open { display: table-row; }
+.detail-cell { padding: 16px 20px; background: #fafafa; }
+.detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; font-size: 13px; }
+.detail-grid dt { color: var(--color-text-secondary); font-weight: 500; }
+.detail-grid dd { word-break: break-all; }
+.detail-ocr { background: #ffffff; border: 1px solid var(--color-border); border-radius: 6px; padding: 12px; margin-top: 10px; max-height: 200px; overflow: auto; font-size: 12px; white-space: pre-wrap; color: var(--color-text-secondary); }
+.screenshot-thumb { margin-top: 10px; cursor: pointer; border-radius: 6px; border: 1px solid var(--color-border); max-width: 200px; transition: transform 0.15s; }
+.screenshot-thumb:hover { transform: scale(1.02); }
+
+/* 截图模态框 */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center; cursor: pointer; }
+.modal-overlay.open { display: flex; }
+.modal-img { max-width: 95vw; max-height: 95vh; object-fit: contain; }
+
+/* 空状态 */
+.empty-state { text-align: center; padding: 48px; color: var(--color-text-secondary); }
+.empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .container { padding: 12px; }
+  .cards { gap: 8px; }
+  .card { padding: 12px 16px; }
+  .card .card-num { font-size: 24px; }
+  thead th, tbody td { padding: 8px 10px; font-size: 12px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- 页头 -->
+  <div class="header">
+    <h1>{{ title }}</h1>
+    <div class="timestamp">生成时间：{{ timestamp }}</div>
+  </div>
+
+  <!-- 汇总卡片 -->
+  <div class="cards">
+    <div class="card card-total">
+      <div class="card-num">{{ stats.total }}</div>
+      <div class="card-label">总数</div>
+    </div>
+    <div class="card card-normal">
+      <div class="card-num">{{ stats.normal }}</div>
+      <div class="card-label">正常</div>
+    </div>
+    {% set warning_count = stats.dialog + stats.short %}
+    <div class="card card-warning">
+      <div class="card-num">{{ warning_count }}</div>
+      <div class="card-label">⚠ 警告</div>
+    </div>
+    {% set error_count = stats.blocked + stats.blank + stats.unknown %}
+    <div class="card card-error">
+      <div class="card-num">{{ error_count }}</div>
+      <div class="card-label">异常</div>
+    </div>
+    <div class="card card-skip">
+      <div class="card-num">{{ stats.no_qr }}</div>
+      <div class="card-label">无二维码</div>
+    </div>
+  </div>
+
+  {% if results %}
+  <!-- 筛选按钮 -->
+  <div class="filters">
+    <button class="filter-btn active" data-filter="all">全部</button>
+    <button class="filter-btn" data-filter="normal">🟢 正常</button>
+    <button class="filter-btn" data-filter="warning">🟡 警告</button>
+    <button class="filter-btn" data-filter="error">🔴 异常</button>
+  </div>
+
+  <!-- 表格 -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>微信号</th>
+          <th>链接</th>
+          <th>状态</th>
+          <th>检测详情</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        {% set row_class = status_css_class.get(r.status, 'status-skip') %}
+        {% set filter_group = 'normal' if r.status == 'normal' else 'warning' if r.status in ('dialog', 'short') else 'error' if r.status in ('blocked', 'blank', 'unknown') else 'skip' %}
+        <tr class="row-{{ filter_group }}" data-group="{{ filter_group }}">
+          <td>{{ loop.index }}</td>
+          <td><strong>{{ r.wechat_id }}</strong></td>
+          <td>
+            {% if r.link %}
+            <span class="url-text" title="{{ r.link }}">{{ r.link }}</span>
+            {% else %}
+            <span style="color:var(--color-skip)">--</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="status-badge {{ status_css_class.get(r.status, 'status-skip') }}">
+              {{ status_labels.get(r.status, r.status) }}
+            </span>
+          </td>
+          <td>
+            <span style="font-size:12px; color:var(--color-text-secondary)">
+              {{ r.detail or '--' }}
+            </span>
+          </td>
+          <td>
+            <button class="expand-btn" onclick="toggleDetail(this, 'detail-{{ loop.index }}')">
+              ▸ 详情
+            </button>
+          </td>
+        </tr>
+        <!-- 展开详情行 -->
+        <tr class="detail-row" id="detail-{{ loop.index }}">
+          <td colspan="6" class="detail-cell">
+            <dl class="detail-grid">
+              <dt>完整链接</dt>
+              <dd>{{ r.link or '无' }}</dd>
+              <dt>OCR文字({{ r.text_length }}字)</dt>
+              <dd>
+                <div class="detail-ocr">{{ r.ocr_text or '(无文字)' }}</div>
+              </dd>
+            </dl>
+            {% if r.screenshot_b64 %}
+            <img class="screenshot-thumb" src="{{ r.screenshot_b64 }}" alt="页面截图" onclick="openModal(this.src)" loading="lazy">
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="icon">📭</div>
+    <p>暂无检测结果</p>
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- 截图放大模态框 -->
+<div class="modal-overlay" id="screenshotModal" onclick="closeModal()">
+  <img class="modal-img" id="modalImg" src="" alt="截图放大">
+</div>
+
+<script>
+// 展开/收起详情
+function toggleDetail(btn, rowId) {
+  var row = document.getElementById(rowId);
+  var isOpen = row.classList.contains('open');
+  // 先关闭所有展开行
+  document.querySelectorAll('.detail-row.open').forEach(function(r) {
+    r.classList.remove('open');
+  });
+  document.querySelectorAll('.expand-btn').forEach(function(b) {
+    b.textContent = '▸ 详情';
+  });
+  if (!isOpen) {
+    row.classList.add('open');
+    btn.textContent = '▾ 收起';
+  }
+}
+
+// 筛选功能
+document.querySelectorAll('.filter-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    // 更新active状态
+    document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+    this.classList.add('active');
+    var filter = this.dataset.filter;
+    // 显示/隐藏行
+    document.querySelectorAll('tbody tr[data-group]').forEach(function(row) {
+      if (filter === 'all' || row.dataset.group === filter) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+    // 隐藏所有展开详情行
+    document.querySelectorAll('.detail-row.open').forEach(function(r) {
+      r.classList.remove('open');
+    });
+  });
+});
+
+// 截图放大
+function openModal(src) {
+  document.getElementById('modalImg').src = src;
+  document.getElementById('screenshotModal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('screenshotModal').classList.remove('open');
+}
+</script>
+</body>
+</html>

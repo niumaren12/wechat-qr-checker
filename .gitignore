@@ -1,0 +1,16 @@
+# 配置文件含敏感信息
+config.yaml
+
+# 输出目录
+output/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/

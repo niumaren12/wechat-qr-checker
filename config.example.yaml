@@ -1,0 +1,62 @@
+# ============================================================
+# 微信二维码扫描检查工具 - 配置文件
+# ============================================================
+
+# --- 手机设置 ---
+device:
+  # Android设备序列号，null=自动检测唯一设备
+  serial: null
+
+# --- 微信设置 ---
+wechat:
+  # 扫一扫Activity（一般不需要改）
+  scan_activity: ".plugin.scanner.ui.BaseScanUI"
+  # 页面加载等待秒数
+  page_load_wait: 3
+  # 操作间随机延时范围（秒），模拟人类操作
+  operation_delay_min: 1.0
+  operation_delay_max: 2.0
+
+# --- 检测规则 ---
+detection:
+  # 页面文字少于此数量视为异常
+  min_text_length: 10
+  # 空白页像素方差阈值（低于此值视为空白）
+  blank_variance_threshold: 5.0
+  # 弹窗检测：暗像素占比阈值
+  modal_dark_pixel_ratio: 0.4
+  # 微信封禁页关键词
+  blocked_keywords:
+    - "已停止访问"
+    - "风险提示"
+    - "不安全内容"
+    - "申请恢复"
+    - "该网页包含"
+    - "涉嫌违规"
+    - "访问受限"
+  # 弹窗关键词
+  dialog_keywords:
+    - "确定"
+    - "取消"
+    - "提示"
+    - "知道了"
+    - "确认"
+
+# --- Telegram通知 ---
+telegram:
+  enabled: false
+  # Bot Token（与自动检查v程序共用）
+  bot_token: "YOUR_BOT_TOKEN_HERE"
+  # Chat ID
+  chat_id: "YOUR_CHAT_ID_HERE"
+  # HTTP代理（国内网络需要），留空则不使用
+  proxy: ""
+  # 通知模式: summary=汇总一条, per_anomaly=每个异常一条, both=两种都发
+  mode: "summary"
+
+# --- 报告设置 ---
+report:
+  title: "微信二维码扫描检查报告"
+  output_dir: "./output/reports"
+  # 报告文件名模板 {timestamp} 会被替换
+  filename_template: "report_{timestamp}.html"
