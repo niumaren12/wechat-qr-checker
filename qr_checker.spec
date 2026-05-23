@@ -1,6 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec — 微信二维码扫描检查工具 Windows 打包"""
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
+
+# 收集 PaddlePaddle 和 PaddleOCR 的所有内容
+print("正在收集 PaddlePaddle 模块...")
+paddle_datas, paddle_binaries, paddle_hidden = collect_all('paddle')
+print("正在收集 PaddleOCR 模块...")
+paddleocr_datas, paddleocr_binaries, paddleocr_hidden = collect_all('paddleocr')
 
 # 收集 uiautomator2 的数据文件
 u2_datas = collect_data_files('uiautomator2')
@@ -11,11 +17,11 @@ block_cipher = None
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[],
+    binaries=paddle_binaries + paddleocr_binaries,
     datas=[
         ('wechat_ids.txt', '.'),
         ('templates/report.html', 'templates/'),
-    ] + u2_datas,
+    ] + u2_datas + paddle_datas + paddleocr_datas,
     hiddenimports=[
         # 标准库
         'asyncio', 'webbrowser', 'winsound', 'concurrent.futures',
@@ -41,8 +47,8 @@ a = Analysis(
 
         # PIL
         'PIL', 'PIL.Image', 'PIL._imaging',
-    ] + u2_subs,
-    hookspath=['hooks'],  # 使用自定义 hooks 目录
+    ] + u2_subs + paddle_hidden + paddleocr_hidden,
+    hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
