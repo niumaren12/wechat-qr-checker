@@ -3,9 +3,7 @@
 from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
 # 收集 PaddlePaddle 和 PaddleOCR 的所有内容
-print("正在收集 PaddlePaddle 模块...")
 paddle_datas, paddle_binaries, paddle_hidden = collect_all('paddle')
-print("正在收集 PaddleOCR 模块...")
 paddleocr_datas, paddleocr_binaries, paddleocr_hidden = collect_all('paddleocr')
 
 # 收集 uiautomator2 的数据文件
