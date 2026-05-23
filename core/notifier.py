@@ -9,6 +9,8 @@ from typing import Optional
 
 import httpx
 
+from core.logger import logger
+
 
 class Notifier:
     """异常通知：蜂鸣 + Telegram"""
@@ -20,6 +22,7 @@ class Notifier:
         self.chat_id = cfg.get("chat_id", "")
         self.proxy = cfg.get("proxy", "")
         self.mode = cfg.get("mode", "summary")
+        logger.debug(f"通知模块初始化: Telegram={'启用' if self.enabled else '禁用'}")
 
     # ============================================================
     # 蜂鸣
@@ -27,6 +30,7 @@ class Notifier:
 
     def beep_alert(self, count: int = 3):
         """系统蜂鸣告警"""
+        logger.debug(f"蜂鸣告警 {count} 次")
         if sys.platform == "win32":
             import winsound
             for _ in range(count):
@@ -71,13 +75,13 @@ class Notifier:
             async with httpx.AsyncClient(timeout=15, **client_kwargs) as client:
                 resp = await client.post(url, json=payload)
                 if resp.status_code == 200:
-                    print("[Telegram] 通知已发送")
+                    logger.info("Telegram 通知已发送")
                     return True
                 else:
-                    print(f"[Telegram] 发送失败: {resp.status_code} {resp.text}")
+                    logger.error(f"Telegram 发送失败: {resp.status_code} {resp.text}")
                     return False
         except Exception as e:
-            print(f"[Telegram] 连接失败: {e}")
+            logger.error(f"Telegram 连接失败: {e}")
             return False
 
     async def notify_anomalies(self, results: list[dict]):
@@ -85,13 +89,17 @@ class Notifier:
         anomalies = [r for r in results if r.get("status") not in ("normal", "no_qr")]
 
         if not anomalies:
+            logger.debug("无异常，不需要通知")
             return
+
+        logger.info(f"发现 {len(anomalies)} 个异常，发送通知")
 
         # 先蜂鸣
         self.beep_alert(count=3)
 
         # 再Telegram
         if not self.enabled:
+            logger.debug("Telegram 通知已禁用")
             return
 
         if self.mode in ("summary", "both"):

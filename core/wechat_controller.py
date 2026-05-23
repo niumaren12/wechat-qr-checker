@@ -11,6 +11,8 @@ from typing import Optional
 
 import uiautomator2 as u2
 
+from core.logger import logger
+
 
 class WeChatController:
     """微信扫一扫自动化控制器"""
@@ -27,8 +29,14 @@ class WeChatController:
         # 连接设备
         serial = dev_cfg.get("serial")
         self.serial = serial
-        self.d = u2.connect(serial) if serial else u2.connect()
-        print(f"[设备] 已连接: {self.d.info.get('productName', 'Unknown')}")
+        logger.info(f"正在连接设备: {serial or '自动检测'}")
+        try:
+            self.d = u2.connect(serial) if serial else u2.connect()
+            device_name = self.d.info.get('productName', 'Unknown')
+            logger.info(f"设备已连接: {device_name}")
+        except Exception as e:
+            logger.error(f"设备连接失败: {e}")
+            raise
 
     # ============================================================
     # 缓存清理
@@ -49,7 +57,7 @@ class WeChatController:
 
     def clear_cache_full(self):
         """会话开始：完整清缓存（不影响登录状态）"""
-        print("[缓存] 完整清理...")
+        logger.info("完整清理缓存...")
 
         # 1. 杀微信进程，清除内存中的扫一扫缓存
         self._adb_shell("am force-stop com.tencent.mm")
@@ -61,7 +69,7 @@ class WeChatController:
         # 3. 删X5内核缓存
         self._adb_shell("rm -rf /sdcard/Android/data/com.tencent.mm/files/xwalk_cache/*")
 
-        print("[缓存] 清理完成")
+        logger.info("缓存清理完成")
 
     def clear_cache_light(self):
         """每张照片间：杀进程快速清内存缓存"""
@@ -74,6 +82,7 @@ class WeChatController:
 
     def start_wechat(self):
         """启动微信并等待就绪"""
+        logger.debug("启动微信")
         self.d.app_start("com.tencent.mm")
         time.sleep(3)
         self._random_delay()
@@ -84,6 +93,7 @@ class WeChatController:
 
     def open_scanner(self):
         """直接启动扫一扫Activity"""
+        logger.debug("打开扫一扫")
         self.d.app_start("com.tencent.mm", activity=self.scan_activity)
         time.sleep(1.5)
         self._random_delay()
@@ -103,6 +113,7 @@ class WeChatController:
                 if elem.exists(timeout=2):
                     elem.click()
                     time.sleep(0.8)
+                    logger.debug("点击相册按钮成功")
                     return True
             except Exception:
                 continue
@@ -111,6 +122,7 @@ class WeChatController:
         w, h = self.d.window_size()
         self.d.click(w * 0.85, h * 0.88)
         time.sleep(0.8)
+        logger.debug("点击相册按钮(坐标兜底)")
         return True
 
     def select_photo_by_index(self, index: int) -> bool:
@@ -120,6 +132,7 @@ class WeChatController:
         1. 尝试定位图片列表中的第index个ImageView
         2. 如果相册视图是网格布局，计算行列坐标
         """
+        logger.debug(f"选择第 {index} 张照片")
         # 策略1：尝试点击第一个可见的图片缩略图
         # 大多数选择器打开后默认显示最近的照片
         try:
@@ -132,9 +145,10 @@ class WeChatController:
                 if len(img_list) > target_idx:
                     img_list[target_idx].click()
                     time.sleep(1)
+                    logger.debug(f"通过ImageView选择照片成功")
                     return True
         except Exception as e:
-            print(f"[选择器] ImageView策略失败: {e}")
+            logger.warning(f"ImageView策略失败: {e}")
 
         # 策略2：网格坐标点击
         # 假设3列网格，第0张在左上角
@@ -149,10 +163,12 @@ class WeChatController:
         y = start_y + cell_h * (row + 0.5)
         self.d.click(x, y)
         time.sleep(1)
+        logger.debug(f"通过网格坐标选择照片: col={col}, row={row}")
         return True
 
     def wait_for_qr_popup(self, timeout: float = 5.0) -> bool:
         """等待微信识别二维码并弹出结果弹窗"""
+        logger.debug(f"等待二维码识别弹窗 (超时={timeout}s)")
         # 弹窗中通常包含链接（含"http"字样）或"打开"按钮
         try:
             has_link = self.d(textContains="http").wait(timeout=timeout)
@@ -169,6 +185,7 @@ class WeChatController:
 
     def get_popup_link(self) -> Optional[str]:
         """从识别结果弹窗中抓取链接文字"""
+        logger.debug("抓取弹窗链接")
         # 方法1：通过XPath找包含http的文本元素
         try:
             elem = self.d.xpath('//*[contains(@text, "http")]')
@@ -201,10 +218,12 @@ class WeChatController:
         except Exception:
             pass
 
+        logger.warning("未能抓取到链接")
         return None
 
     def click_open_button(self) -> bool:
         """点击弹窗中的"打开"按钮，在微信内置浏览器加载页面"""
+        logger.debug("点击打开按钮")
         try:
             open_btn = self.d(text="打开")
             if open_btn.wait(timeout=3):
@@ -212,12 +231,13 @@ class WeChatController:
                 time.sleep(self.page_load_wait)
                 self._random_delay()
                 return True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"点击打开按钮失败: {e}")
         return False
 
     def take_screenshot(self) -> bytes:
         """截取当前屏幕（PNG格式bytes）"""
+        logger.debug("截取屏幕")
         return self.d.screenshot(format="raw")
 
     # ============================================================

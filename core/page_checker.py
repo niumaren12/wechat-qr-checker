@@ -12,6 +12,8 @@ import numpy as np
 from PIL import Image
 from paddleocr import PaddleOCR
 
+from core.logger import logger
+
 
 class PageStatus(str, Enum):
     NORMAL = "normal"       # 页面正常
@@ -42,11 +44,12 @@ class PageChecker:
         self.dialog_keywords = cfg["dialog_keywords"]
 
         # 初始化PaddleOCR（中文，不使用GPU）
-        print("[OCR] 初始化PaddleOCR（首次运行需下载模型，约15MB）...")
+        logger.info("初始化 PaddleOCR（首次运行需下载模型，约15MB）...")
         try:
             self.ocr = PaddleOCR(use_angle_cls=True, lang="ch", use_gpu=False)
-            print("[OCR] 初始化完成")
+            logger.info("PaddleOCR 初始化完成")
         except Exception as e:
+            logger.error(f"PaddleOCR 初始化失败: {e}")
             raise RuntimeError(
                 f"PaddleOCR初始化失败: {e}\n"
                 "请检查网络连接（首次运行需下载模型），"
@@ -55,41 +58,48 @@ class PageChecker:
 
     def check(self, screenshot_bytes: bytes) -> CheckResult:
         """检测页面截图，返回检测结果"""
+        logger.debug("开始检测页面截图")
         # 将bytes转为numpy数组
         img = self._bytes_to_image(screenshot_bytes)
         if img is None:
+            logger.error("截图数据无效")
             return CheckResult(PageStatus.UNKNOWN, "", 0, "截图数据无效")
 
         ocr_text = self._ocr_extract(img)
         clean_text = self._clean_text(ocr_text)
         text_len = len(clean_text)
 
+        logger.debug(f"OCR识别文字数: {text_len}")
+
         # 按优先级逐项检测
 
         # 1. 微信封禁页
         blocked, blocked_detail = self._check_blocked(ocr_text)
         if blocked:
+            logger.warning(f"检测到封禁页: {blocked_detail}")
             return CheckResult(PageStatus.BLOCKED, ocr_text, text_len, blocked_detail)
 
         # 2. 弹窗提示（像素分析 + OCR关键词）
         dialog, dialog_detail = self._check_dialog(img, ocr_text)
         if dialog:
+            logger.warning(f"检测到弹窗: {dialog_detail}")
             return CheckResult(PageStatus.DIALOG, ocr_text, text_len, dialog_detail)
 
         # 3. 页面空白
         blank, blank_detail = self._check_blank(img, ocr_text)
         if blank:
+            logger.warning(f"检测到空白页: {blank_detail}")
             return CheckResult(PageStatus.BLANK, ocr_text, text_len, blank_detail)
 
         # 4. 文字极少
         if text_len < self.min_text_length:
             preview = clean_text[:50] if clean_text else "(无文字)"
-            return CheckResult(
-                PageStatus.SHORT, ocr_text, text_len,
-                f"页面文字仅{text_len}个字符: {preview}"
-            )
+            detail = f"页面文字仅{text_len}个字符: {preview}"
+            logger.warning(detail)
+            return CheckResult(PageStatus.SHORT, ocr_text, text_len, detail)
 
         # 5. 正常
+        logger.debug(f"页面正常，共 {text_len} 个字符")
         return CheckResult(
             PageStatus.NORMAL, ocr_text, text_len,
             f"页面正常，共{text_len}个字符"
@@ -176,7 +186,7 @@ class PageChecker:
 
             return "\n".join(texts)
         except Exception as e:
-            print(f"[OCR] 识别出错: {e}")
+            logger.error(f"OCR识别出错: {e}")
             return ""
 
     # ============================================================
@@ -189,7 +199,7 @@ class PageChecker:
             img = Image.open(io.BytesIO(data))
             return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
         except Exception as e:
-            print(f"[图像] 转换失败: {e}")
+            logger.error(f"图像转换失败: {e}")
             return None
 
     def _clean_text(self, text: str) -> str:

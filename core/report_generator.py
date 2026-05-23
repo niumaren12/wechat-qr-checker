@@ -10,6 +10,8 @@ from typing import Optional
 
 from jinja2 import Environment, FileSystemLoader
 
+from core.logger import logger
+
 
 class ReportGenerator:
     """HTML报告生成器"""
@@ -20,6 +22,7 @@ class ReportGenerator:
         self.output_dir = Path(cfg["output_dir"])
         self.filename_template = cfg["filename_template"]
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"报告输出目录: {self.output_dir}")
 
         # 加载Jinja2模板（适配PyInstaller打包环境）
         if getattr(sys, 'frozen', False):
@@ -28,6 +31,7 @@ class ReportGenerator:
             template_dir = Path(__file__).parent.parent / "templates"
         self.env = Environment(loader=FileSystemLoader(str(template_dir)))
         self.template = self.env.get_template("report.html")
+        logger.debug("报告模板加载完成")
 
     def generate(self, results: list[dict], stats: dict,
                  output_path: Optional[str] = None) -> str:
@@ -45,6 +49,8 @@ class ReportGenerator:
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = self.filename_template.format(timestamp=ts)
             output_path = str(self.output_dir / filename)
+
+        logger.debug(f"正在生成报告: {output_path}")
 
         # 截图转base64嵌入HTML
         for r in results:
@@ -76,6 +82,7 @@ class ReportGenerator:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(html)
 
+        logger.info(f"报告已生成: {output_path}")
         return output_path
 
     def compute_stats(self, results: list[dict]) -> dict:
@@ -92,6 +99,7 @@ class ReportGenerator:
             else:
                 stats["unknown"] += 1
         stats["anomaly_count"] = stats["total"] - stats["normal"] - stats["no_qr"]
+        logger.debug(f"统计: 总数={stats['total']}, 正常={stats['normal']}, 异常={stats['anomaly_count']}")
         return stats
 
     def _bytes_to_data_uri(self, data: bytes) -> str:

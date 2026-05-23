@@ -8,10 +8,12 @@ import sys
 import time
 import asyncio
 import argparse
+import traceback
 from pathlib import Path
 
 import yaml
 
+from core.logger import logger
 from core.wechat_controller import WeChatController
 from core.page_checker import PageChecker, CheckResult
 from core.report_generator import ReportGenerator
@@ -22,17 +24,19 @@ def load_config(config_path: str) -> dict:
     """加载YAML配置文件"""
     path = Path(config_path)
     if not path.exists():
-        print(f"[错误] 配置文件不存在: {config_path}")
+        logger.error(f"配置文件不存在: {config_path}")
         sys.exit(1)
     with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        config = yaml.safe_load(f)
+        logger.info(f"配置加载成功: {config_path}")
+        return config
 
 
 def load_wechat_ids(filepath: str) -> list[str]:
     """加载微信号列表（跳过注释和空行）"""
     path = Path(filepath)
     if not path.exists():
-        print(f"[错误] 微信号文件不存在: {filepath}")
+        logger.error(f"微信号文件不存在: {filepath}")
         sys.exit(1)
     ids = []
     with open(path, "r", encoding="utf-8") as f:
@@ -40,6 +44,7 @@ def load_wechat_ids(filepath: str) -> list[str]:
             line = line.strip()
             if line and not line.startswith("#"):
                 ids.append(line)
+    logger.info(f"已加载 {len(ids)} 个微信号")
     return ids
 
 
@@ -77,21 +82,22 @@ async def main():
     parser.add_argument("--dry-run", action="store_true", help="仅加载配置，不实际扫描")
     args = parser.parse_args()
 
+    logger.info("=" * 50)
+    logger.info("微信二维码扫描检查工具启动")
+    logger.info("=" * 50)
+
     # 加载配置
     config = load_config(args.config)
     wechat_ids = load_wechat_ids(args.wechat_ids)
-    print(f"[配置] 已加载 {len(wechat_ids)} 个微信号")
 
     if args.dry_run:
-        print("[DRY RUN] 配置检查完成")
+        logger.info("[DRY RUN] 配置检查完成")
         return
 
     # ============================================================
     # Phase 1: 初始化
     # ============================================================
-    print("\n" + "=" * 60)
-    print("  Phase 1: 初始化")
-    print("=" * 60)
+    logger.info("Phase 1: 初始化")
 
     controller = WeChatController(config)
     checker = PageChecker(config)
@@ -101,9 +107,7 @@ async def main():
     # ============================================================
     # Phase 2: 清缓存 + 扫描
     # ============================================================
-    print("\n" + "=" * 60)
-    print("  Phase 2: 开始扫描")
-    print("=" * 60)
+    logger.info("Phase 2: 开始扫描")
 
     # 会话开始：完整清缓存
     controller.clear_cache_full()
@@ -111,7 +115,7 @@ async def main():
 
     results = []
     for i, wechat_id in enumerate(wechat_ids):
-        print(f"\n[{i+1}/{len(wechat_ids)}] 扫描: {wechat_id}")
+        logger.info(f"[{i+1}/{len(wechat_ids)}] 扫描: {wechat_id}")
 
         result = {
             "wechat_id": wechat_id,
@@ -136,7 +140,7 @@ async def main():
             # 4. 等待识别
             if not controller.wait_for_qr_popup(timeout=6):
                 result["detail"] = "未识别到二维码"
-                print(f"  ⚠ 未识别到二维码")
+                logger.warning(f"未识别到二维码: {wechat_id}")
                 results.append(result)
                 controller.clear_cache_light()
                 controller.start_wechat()
@@ -145,12 +149,13 @@ async def main():
             # 5. 抓链接
             link = controller.get_popup_link()
             result["link"] = link
-            print(f"  链接: {link[:80] if link else '(未能读取)'}")
+            logger.info(f"链接: {link[:80] if link else '(未能读取)'}")
 
             # 6. 点打开
             if not controller.click_open_button():
                 result["detail"] = "无法点击'打开'按钮"
                 result["status"] = "unknown"
+                logger.warning(f"无法点击打开按钮: {wechat_id}")
                 results.append(result)
                 controller.clear_cache_light()
                 controller.start_wechat()
@@ -171,17 +176,13 @@ async def main():
             result["ocr_text"] = check_result.text
             result["text_length"] = check_result.text_length
 
-            status_cn = {
-                "normal": "✓ 正常", "blocked": "⛔ 已封禁", "dialog": "⚠ 弹窗",
-                "blank": "🈳 空白页", "short": "📝 极少文字", "unknown": "❓ 未知"
-            }.get(check_result.status.value, check_result.status.value)
-            print(f"  结果: {status_cn}")
+            logger.info(f"检测结果: {check_result.status.value} - {check_result.detail}")
 
         except Exception as e:
             # 设备断连或其他异常，记录并继续
             result["status"] = "unknown"
             result["detail"] = f"扫描过程异常: {e}"
-            print(f"  ❌ 异常: {e}")
+            logger.error(f"扫描异常 [{wechat_id}]: {e}\n{traceback.format_exc()}")
 
         results.append(result)
 
@@ -189,27 +190,23 @@ async def main():
         try:
             controller.clear_cache_light()
             controller.start_wechat()
-        except Exception:
-            print("  ⚠ 缓存清理失败，尝试继续...")
+        except Exception as e:
+            logger.warning(f"缓存清理失败: {e}")
             time.sleep(2)
 
     # ============================================================
     # Phase 3: 生成报告
     # ============================================================
-    print("\n" + "=" * 60)
-    print("  Phase 3: 生成报告")
-    print("=" * 60)
+    logger.info("Phase 3: 生成报告")
 
     stats = reporter.compute_stats(results)
     report_path = reporter.generate(results, stats)
-    print(f"[报告] {report_path}")
+    logger.info(f"报告已生成: {report_path}")
 
     # ============================================================
     # Phase 4: 通知
     # ============================================================
-    print("\n" + "=" * 60)
-    print("  Phase 4: 异常通知")
-    print("=" * 60)
+    logger.info("Phase 4: 异常通知")
 
     await notifier.notify_anomalies(results)
 
@@ -217,13 +214,33 @@ async def main():
     # 总览
     # ============================================================
     print_summary(results, stats)
+    logger.info(f"扫描完成: 总数={stats['total']}, 正常={stats['normal']}, 异常={stats['anomaly_count']}")
 
     # 打开报告
     import webbrowser
     webbrowser.open(f"file:///{report_path}")
 
-    print(f"\n报告已打开: {report_path}")
+    logger.info(f"报告已打开: {report_path}")
+
+
+def run():
+    """入口函数，捕获所有异常"""
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("用户中断")
+    except SystemExit:
+        raise
+    except Exception as e:
+        logger.critical(f"程序崩溃: {e}\n{traceback.format_exc()}")
+        print("\n" + "=" * 60)
+        print("  程序发生错误，请查看日志文件")
+        print("  日志位置: logs/qr_checker.log")
+        print("=" * 60)
+        print(f"\n错误信息: {e}")
+        input("\n按回车键退出...")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run()
